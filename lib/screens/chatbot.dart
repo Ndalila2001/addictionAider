@@ -2,6 +2,7 @@ import 'package:addiction_aider/consts/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 
 class ChatBotApp extends StatelessWidget {
   const ChatBotApp({super.key});
@@ -25,6 +26,9 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   late WebSocketChannel _channel;
+  bool _isConnected = false;
+  String _connectionStatus = 'Connecting...';
+  
   final List<Map<String, dynamic>> _messages = [
     {
       'text': 'Hello! How can I help you today?',
@@ -38,50 +42,73 @@ class _ChatScreenState extends State<ChatScreen> {
     _connectToWebSocket();
   }
 
-  void _connectToWebSocket() {
-    // Replace with your actual WebSocket URL
-    _channel = WebSocketChannel.connect(
-      Uri.parse('ws://192.168.64.1/api/v1/chat/ws'),
-    );
+  Future<void> _connectToWebSocket() async {
+    setState(() {
+      _connectionStatus = 'Connecting...';
+      _isConnected = false;
+    });
 
-    _channel.stream.listen(
-      (message) {
-        setState(() {
-          _messages.add({
-            'text': message,
-            'isMe': false,
+    try {
+      // Try different URLs - pick one that works for your setup
+      // const url = 'ws://10.0.2.2/api/v1/chat/ws'; // For Android emulator
+      const url = 'ws://192.168.1.100/api/v1/chat/ws'; // For local network
+      // const url = 'wss://your-production-server.com/chat'; // For production
+
+      _channel = IOWebSocketChannel.connect(
+        Uri.parse(url),
+        pingInterval: const Duration(seconds: 30),
+      );
+
+      setState(() {
+        _connectionStatus = 'Connected';
+        _isConnected = true;
+      });
+
+      _channel.stream.listen(
+        (message) {
+          setState(() {
+            _messages.add({
+              'text': message,
+              'isMe': false,
+            });
           });
-        });
-      },
-      onError: (error) {
-        print('WebSocket error: $error');
-        // Add error message to chat
-        setState(() {
-          _messages.add({
-            'text': 'Connection error. Trying to reconnect...',
-            'isMe': false,
+        },
+        onError: (error) {
+          print('WebSocket error: $error');
+          setState(() {
+            _connectionStatus = 'Error: ${error.toString()}';
+            _isConnected = false;
           });
-        });
-        // Try to reconnect after 5 seconds
-        Future.delayed(const Duration(seconds: 5), _connectToWebSocket);
-      },
-      onDone: () {
-        print('WebSocket connection closed');
-        // Add connection closed message to chat
-        setState(() {
-          _messages.add({
-            'text': 'Connection lost. Trying to reconnect...',
-            'isMe': false,
+          _reconnect();
+        },
+        onDone: () {
+          print('WebSocket connection closed');
+          setState(() {
+            _connectionStatus = 'Disconnected';
+            _isConnected = false;
           });
-        });
-        // Try to reconnect after 5 seconds
-        Future.delayed(const Duration(seconds: 5), _connectToWebSocket);
-      },
-    );
+          _reconnect();
+        },
+      );
+    } catch (e) {
+      print('Connection failed: $e');
+      setState(() {
+        _connectionStatus = 'Failed: ${e.toString()}';
+        _isConnected = false;
+      });
+      _reconnect();
+    }
+  }
+
+  void _reconnect() {
+    Future.delayed(const Duration(seconds: 5), () {
+      print('Attempting to reconnect...');
+      _connectToWebSocket();
+    });
   }
 
   void _sendMessage() {
-    if (_controller.text.trim().isNotEmpty) {
+    if (_controller.text.trim().isNotEmpty && _isConnected) {
       final message = _controller.text;
       setState(() {
         _messages.add({
@@ -90,9 +117,15 @@ class _ChatScreenState extends State<ChatScreen> {
         });
       });
       
-      // Send message through WebSocket
       _channel.sink.add(message);
       _controller.clear();
+    } else if (!_isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Not connected to server'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -109,13 +142,25 @@ class _ChatScreenState extends State<ChatScreen> {
       backgroundColor: const Color(0xFFDCD9EC),
       body: Column(
         children: [
-          const Text(
-            'AI ChatBot',
-            style: TextStyle(
-              fontSize: 50,
-              fontFamily: "Fatone",
-              color: Colors.black,
-            ),
+          const SizedBox(height: 16),
+          Column(
+            children: [
+              const Text(
+                'AI ChatBot',
+                style: TextStyle(
+                  fontSize: 50,
+                  fontFamily: "Fatone",
+                  color: Colors.black,
+                ),
+              ),
+              Text(
+                _connectionStatus,
+                style: TextStyle(
+                  color: _isConnected ? Colors.green : Colors.red,
+                  fontFamily: "Baloo",
+                ),
+              ),
+            ],
           ),
           Expanded(
             child: ListView.builder(
@@ -159,7 +204,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
-                      maxHeight: 120, // 5 lines * 24px line height approx
+                      maxHeight: 120,
                     ),
                     child: TextField(
                       controller: _controller,
@@ -167,7 +212,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         color: Colors.black,
                         fontFamily: "Baloo",
                       ),
-                      maxLines: null, // Allows unlimited lines
+                      maxLines: null,
                       keyboardType: TextInputType.multiline,
                       onSubmitted: (_) => _sendMessage(),
                       decoration: InputDecoration(
