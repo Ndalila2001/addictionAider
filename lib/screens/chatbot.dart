@@ -127,7 +127,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(15),
           border: Border.all(
-            color: whiteColor,
+            color: Colors.transparent,
             width: 1.5,
           ),
         ),
@@ -241,8 +241,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     ),
                     decoration: BoxDecoration(
                       color: message['isMe'] 
-                          ? secColor
-                          : mainColor,
+                          ? mainColor
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(15),
                       border: Border.all(
                         color: message['isMe'] ? secColor : Colors.transparent,
@@ -264,7 +264,8 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                           '${message['timestamp'].hour}:${message['timestamp'].minute.toString().padLeft(2, '0')}',
                           style: TextStyle(
                             fontSize: 10,
-                            color: Colors.grey[600],
+                            fontFamily: 'Baloo',
+                            color: blackColor.withOpacity(0.6),
                           ),
                         ),
                       ],
