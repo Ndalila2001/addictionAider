@@ -2,7 +2,7 @@ import 'package:addiction_aider/consts/colors.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/status.dart' as status;
 
 class ChatBotApp extends StatelessWidget {
   const ChatBotApp({super.key});
@@ -23,115 +23,182 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   late WebSocketChannel _channel;
-  bool _isConnected = false;
-  String _connectionStatus = 'Connecting...';
-  
-  final List<Map<String, dynamic>> _messages = [
-    {
-      'text': 'Hello! How can I help you today?',
-      'isMe': false,
-    },
-  ];
+  final List<Map<String, dynamic>> _messages = [];
+  bool _isWaitingForResponse = false;
+  late AnimationController _loadingController;
+  late Animation<double> _dot1Animation;
+  late Animation<double> _dot2Animation;
+  late Animation<double> _dot3Animation;
 
   @override
   void initState() {
     super.initState();
     _connectToWebSocket();
+    
+    // Initialize animation controller
+    _loadingController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+    
+    // Create animations for each dot
+    _dot1Animation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.2, end: 1.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.2), weight: 1),
+    ]).animate(CurvedAnimation(
+      parent: _loadingController,
+      curve: const Interval(0.0, 0.33, curve: Curves.easeInOut),
+    ));
+    
+    _dot2Animation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.2, end: 1.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.2), weight: 1),
+    ]).animate(CurvedAnimation(
+      parent: _loadingController,
+      curve: const Interval(0.33, 0.66, curve: Curves.easeInOut),
+    ));
+    
+    _dot3Animation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.2, end: 1.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.2), weight: 1),
+    ]).animate(CurvedAnimation(
+      parent: _loadingController,
+      curve: const Interval(0.66, 1.0, curve: Curves.easeInOut),
+    ));
   }
 
-  Future<void> _connectToWebSocket() async {
-    setState(() {
-      _connectionStatus = 'Connecting...';
-      _isConnected = false;
-    });
+  void _connectToWebSocket() {
+    _channel = WebSocketChannel.connect(
+      Uri.parse('ws://localhost:8000/api/v1/bot/ws'),
+    );
 
-    try {
-      // Try different URLs - pick one that works for your setup
-      // const url = 'ws://10.0.2.2/api/v1/chat/ws'; // For Android emulator
-      const url = 'ws://192.168.1.100/api/v1/chat/ws'; // For local network
-      // const url = 'wss://your-production-server.com/chat'; // For production
-
-      _channel = IOWebSocketChannel.connect(
-        Uri.parse(url),
-        pingInterval: const Duration(seconds: 30),
-      );
-
-      setState(() {
-        _connectionStatus = 'Connected';
-        _isConnected = true;
-      });
-
-      _channel.stream.listen(
-        (message) {
-          setState(() {
-            _messages.add({
-              'text': message,
-              'isMe': false,
-            });
+    _channel.stream.listen(
+      (message) {
+        setState(() {
+          _isWaitingForResponse = false;
+          _messages.add({
+            'text': message,
+            'isMe': false,
+            'timestamp': DateTime.now(),
           });
-        },
-        onError: (error) {
-          print('WebSocket error: $error');
-          setState(() {
-            _connectionStatus = 'Error: ${error.toString()}';
-            _isConnected = false;
-          });
-          _reconnect();
-        },
-        onDone: () {
-          print('WebSocket connection closed');
-          setState(() {
-            _connectionStatus = 'Disconnected';
-            _isConnected = false;
-          });
-          _reconnect();
-        },
-      );
-    } catch (e) {
-      print('Connection failed: $e');
-      setState(() {
-        _connectionStatus = 'Failed: ${e.toString()}';
-        _isConnected = false;
-      });
-      _reconnect();
-    }
-  }
-
-  void _reconnect() {
-    Future.delayed(const Duration(seconds: 5), () {
-      print('Attempting to reconnect...');
-      _connectToWebSocket();
-    });
+        });
+      },
+      onError: (error) {
+        setState(() => _isWaitingForResponse = false);
+        print('WebSocket error: $error');
+      },
+      onDone: () {
+        setState(() => _isWaitingForResponse = false);
+        print('WebSocket connection closed');
+      },
+    );
   }
 
   void _sendMessage() {
-    if (_controller.text.trim().isNotEmpty && _isConnected) {
-      final message = _controller.text;
-      setState(() {
-        _messages.add({
-          'text': message,
-          'isMe': true,
-        });
+    final message = _controller.text.trim();
+    if (message.isEmpty) return;
+
+    setState(() {
+      _messages.add({
+        'text': message,
+        'isMe': true,
+        'timestamp': DateTime.now(),
       });
-      
-      _channel.sink.add(message);
-      _controller.clear();
-    } else if (!_isConnected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Not connected to server'),
-          backgroundColor: Colors.red,
+      _isWaitingForResponse = true;
+    });
+
+    _channel.sink.add(message);
+    _controller.clear();
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
         ),
-      );
-    }
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(
+            color: whiteColor,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedBuilder(
+              animation: _dot1Animation,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _dot1Animation.value,
+                  child: child,
+                );
+              },
+              child: Container(
+                width: 12,
+                height: 12,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: const BoxDecoration(
+                  color: secColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            AnimatedBuilder(
+              animation: _dot2Animation,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _dot2Animation.value,
+                  child: child,
+                );
+              },
+              child: Container(
+                width: 12,
+                height: 12,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: const BoxDecoration(
+                  color: secColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            AnimatedBuilder(
+              animation: _dot3Animation,
+              builder: (context, child) {
+                return Opacity(
+                  opacity: _dot3Animation.value,
+                  child: child,
+                );
+              },
+              //hjghjghjgjg
+              child: Container(
+                width: 12,
+                height: 12,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: const BoxDecoration(
+                  color: secColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _channel.sink.close();
+    _loadingController.dispose();
+    _channel.sink.close(status.goingAway);
     _controller.dispose();
     super.dispose();
   }
@@ -143,31 +210,24 @@ class _ChatScreenState extends State<ChatScreen> {
       body: Column(
         children: [
           const SizedBox(height: 16),
-          Column(
-            children: [
-              const Text(
-                'AI ChatBot',
-                style: TextStyle(
-                  fontSize: 50,
-                  fontFamily: "Fatone",
-                  color: Colors.black,
-                ),
-              ),
-              Text(
-                _connectionStatus,
-                style: TextStyle(
-                  color: _isConnected ? Colors.green : Colors.red,
-                  fontFamily: "Baloo",
-                ),
-              ),
-            ],
+          const Text(
+            'AI ChatBot',
+            style: TextStyle(
+              fontSize: 32,
+              fontFamily: "Fatone",
+              color: Colors.black,
+            ),
           ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               reverse: false,
-              itemCount: _messages.length,
+              itemCount: _messages.length + (_isWaitingForResponse ? 1 : 0),
               itemBuilder: (context, index) {
+                if (_isWaitingForResponse && index == _messages.length) {
+                  return _buildLoadingIndicator();
+                }
+                
                 final message = _messages[index];
                 return Align(
                   alignment: message['isMe']
@@ -176,20 +236,38 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(20),
-                      border: message['isMe']
-                          ? Border.all(color: secColor, width: 2)
-                          : Border.all(color: mainColor),
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    child: Text(
-                      message['text'],
-                      style: TextStyle(
-                        fontFamily: "Baloo",
-                        color: message['isMe'] ? blackColor : Colors.black,
+                    decoration: BoxDecoration(
+                      color: message['isMe'] 
+                          ? secColor
+                          : mainColor,
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: message['isMe'] ? secColor : Colors.transparent,
+                        width: 1.5,
                       ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          message['text'],
+                          style: TextStyle(
+                            fontFamily: "Baloo",
+                            color: message['isMe'] ? blackColor : Colors.black,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${message['timestamp'].hour}:${message['timestamp'].minute.toString().padLeft(2, '0')}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 );
@@ -197,47 +275,41 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxHeight: 120,
+                  child: TextField(
+                    controller: _controller,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontFamily: "Baloo",
                     ),
-                    child: TextField(
-                      controller: _controller,
-                      style: const TextStyle(
-                        color: Colors.black,
+                    onSubmitted: (_) => _sendMessage(),
+                    decoration: InputDecoration(
+                      hintText: "How are you feeling?",
+                      hintStyle: const TextStyle(
+                        color: blackColor,
                         fontFamily: "Baloo",
                       ),
-                      maxLines: null,
-                      keyboardType: TextInputType.multiline,
-                      onSubmitted: (_) => _sendMessage(),
-                      decoration: InputDecoration(
-                        hintText: "How are you feeling?",
-                        hintStyle: const TextStyle(
-                          color: Colors.black,
-                          fontFamily: "Baloo",
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: const BorderSide(color: secColor),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: const BorderSide(color: secColor),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: const BorderSide(color: secColor),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                        filled: true,
-                        fillColor: Colors.transparent,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: const BorderSide(color: secColor),
                       ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: const BorderSide(color: secColor),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: const BorderSide(color: secColor),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      filled: true,
+                      fillColor: mainColor,
                     ),
                   ),
                 ),
