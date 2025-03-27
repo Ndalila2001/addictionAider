@@ -35,11 +35,11 @@ class _MainHomeMangerState extends State<MainHomeManger> {
         backgroundColor: const Color(0xFF28E07E),
         elevation: 0,
         leading: Builder(
-          // FIX: Wrap in Builder to access Scaffold correctly
+          
           builder: (context) => IconButton(
             icon: const Icon(LucideIcons.menu, color: Colors.black),
             onPressed: () {
-              Scaffold.of(context).openDrawer(); // Open the drawer
+              Scaffold.of(context).openDrawer();
             },
           ),
         ),
@@ -55,7 +55,7 @@ class _MainHomeMangerState extends State<MainHomeManger> {
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(26),
             color: const Color(0xFF28E07E),
           ),
           padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
@@ -89,7 +89,6 @@ class _MainHomeMangerState extends State<MainHomeManger> {
   }
 }
 
-// Custom Drawer (Side Menu)
 class CustomDrawer extends StatelessWidget {
   const CustomDrawer({super.key});
 
@@ -103,7 +102,7 @@ class CustomDrawer extends StatelessWidget {
           children: [
             const SizedBox(height: 50),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 50),
               child: Column(
                 children: [
                   DrawerItem(
@@ -119,15 +118,19 @@ class CustomDrawer extends StatelessWidget {
                       text: "UPGRADE TO PREMIUM",
                       onTap: () {}),
                   DrawerItem(
+                      icon: LucideIcons.handshake,
+                      text: "ADD MONITORING PARTNER",
+                      onTap: () {}),    
+                  DrawerItem(
                       icon: LucideIcons.settings,
                       text: "SETTINGS",
                       onTap: () {}),
-                  const SizedBox(height: 50),
+                  const SizedBox(height: 80),
                   const Text(
                     "APP VERSION 0.1 BETA",
                     style: TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Fatone',
                         color: Colors.white),
                   ),
                   const SizedBox(height: 20),
@@ -163,7 +166,7 @@ class DrawerItem extends StatelessWidget {
             Text(
               text,
               style: const TextStyle(
-                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Baloo',
                   fontSize: 18,
                   color: Colors.black),
             ),
