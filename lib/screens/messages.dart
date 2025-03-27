@@ -18,7 +18,7 @@ class _MessagesPageState extends State<MessagesPage> {
   late WebSocketChannel _channel;
   final List<Map<String, dynamic>> _messages = [];
   final String _userId = '67e3278fdd140e3f8d06025a';
-  final String _receiverId = '67e3278fdd140e3f8d06025a';
+  final String _receiverId = '67e4350fea4ec7661bca200d';
   bool _isConnected = false;
 
   @override
@@ -31,7 +31,7 @@ class _MessagesPageState extends State<MessagesPage> {
     try {
       // Use your actual server IP instead of localhost
       _channel = WebSocketChannel.connect(
-        Uri.parse('ws://your-server-ip:8000/API/v1/chat/ws'),
+        Uri.parse('ws://localhost:8000/api/v1/chat/ws'),
       );
 
       // Send user_id immediately
@@ -82,7 +82,7 @@ class _MessagesPageState extends State<MessagesPage> {
 
     final messageData = {
       'sender': _userId,
-      'receiver': _receiverId,
+      'recipient': _receiverId,
       'message': message,
     };
 
