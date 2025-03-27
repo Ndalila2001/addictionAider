@@ -274,6 +274,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                 );
               },
             ),
+
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
